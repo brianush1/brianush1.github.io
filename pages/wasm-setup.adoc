@@ -1,0 +1,166 @@
+= Getting started with D on WebAssembly
+:source-highlighter: pygments
+
+Recently, through Sebastiaan Koppe's excellent work in porting DRuntime to run on WebAssembly (WASM), we can now run D code in the browser with a full runtime and Phobos implementation. This guide will detail how you can set this up and start using D in your own web projects.
+
+I will assume you are using a Linux system, but you can probably use the same principles to get it working under Windows. If there is enough demand, I may expand the guide with specific Windows instructions later.
+
+== Prerequisites
+
+* Git
+* Clang
+* a D compiler (LDC/DMD/GDC)
+* CMake 3.8+
+* Ninja
+* GNU make
+* Python
+* libcurl for Phobos' std.net.curl (e.g., libcurl4 on recent Ubuntu)
+* zlib-dev (e.g., zlib1g-dev on Ubuntu)
+* LLVM dev 6.0+
+* Binaryen
+
+On Ubuntu 18.04 or 20.04, you can use the following command to install these (may work on other Debian-based distros; not tested):
+
+	sudo apt install git make clang++ ldc cmake ninja-build zlib1g-dev libcurl4 llvm-dev libclang-common-6.0-dev binaryen
+
+Also while we're here, make a new directory to house everything to do with your D on WASM setup:
+
+[source,bash]
+----
+mkdir wasm-dlang && cd wasm-dlang
+----
+
+== Setting up WASI-Libc
+
+Make sure you are in your `wasm-dlang` directory, if you chose to make one.
+
+.Clone the repository and its submodules
+[source,bash]
+----
+git clone --recurse-submodules https://github.com/WebAssembly/wasi-libc
+----
+
+.Build the sysroot
+[source,bash]
+----
+cd wasi-libc
+make WASM_CC=`which clang` WASM_AR=`which llvm-ar` WASM_NM=`which llvm-nm`
+----
+
+== Setting up LDC
+
+=== Building LDC
+
+.Go back to `wasm-dlang`
+[source,bash]
+----
+cd ..
+----
+
+.Clone the repository and its submodules
+[source,bash]
+----
+git clone https://github.com/skoppe/ldc.git
+cd ldc
+git checkout wasm
+git submodule update --init
+cd ..
+----
+
+.Create the build directory and build scripts
+[source,bash]
+----
+mkdir build-ldc && cd build-ldc
+cmake -G Ninja ../ldc \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX=$PWD/../install-ldc
+----
+(You may want to change 'Release' to 'RelWithDebInfo' if you're gonna be working on patches to LDC)
+
+.Build LDC
+[source,bash]
+----
+ninja -j4
+----
+This will take a couple minutes and use plenty of RAM.
+
+There will be _tons_ of warnings; you can ignore them.
+
+If you have a _lot_ of free RAM and a multicore CPU, you can change the `-j4` to `-j8` or even higher, to do more work in parallel.
+
+=== Building DRuntime
+
+.Go back to `wasm-dlang`
+[source,bash]
+----
+cd ..
+----
+
+.Create the build directory and build script
+[source,bash]
+----
+mkdir build-druntime && cd build-druntime
+echo -e '#!/bin/sh'"\n\nrm -rf $PWD/out\nCC=clang $PWD/../build-ldc/bin/ldc-build-runtime --ninja --buildDir='$PWD/out' --dFlags='-mtriple=wasm32-unknown-unknown-wasm;-fvisibility=hidden' --targetSystem='WebAssembly' --ldcSrcDir='$PWD/../ldc' --cFlags='-target wasm32-unknown-unknown-wasi --sysroot=$PWD/../wasi-libc/sysroot'\nchown -R $USER:`id -gn` $PWD/out" > build
+chmod +x build
+----
+
+.Run the build script
+[source,bash]
+----
+sudo ./build
+----
+
+== Running it on the web
+
+We're all done with setting up a version of LDC that can compile D to WASM. However, we need a WASI implementation in order to be able to use the generated code.
+
+To run D on the web, we can use a library I wrote called d-wasm-glue, which implements a WASI interface, as well as some glue code to make it more convenient to use JS objects from D, and a wrapper around LDC to pass all the necessary command line options for building WASM.
+
+The wrapper it generates, `wasm-ldc`, has the exact same syntax as LDC for its command line options.
+
+.Go back to `wasm-dlang`
+[source,bash]
+----
+cd ..
+----
+
+.Compile the glue code
+[source,bash]
+----
+git clone https://github.com/brianush1/d-wasm-glue
+cd d-wasm-glue
+rdmd wasm-ldc.d --build-wasm-compiler --add-to-path # you may choose to remove the '--add-to-path' if you do not want it automatically added to your $PATH in ~/.profile
+----
+
+=== Example
+
+.example.d
+[source,d]
+----
+import std.stdio;
+import glue;
+
+void main() {
+	writeln("Hello, from D!"); // open the JS console to see this message
+	js.document.body.innerHTML = "Hello, <em>everyone!</em>";
+}
+----
+
+.example.html
+[source,html]
+----
+<body>
+	<script src="glue.min.js"></script>
+	<script>
+		runFile("example.wasm");
+	</script>
+</body>
+----
+
+.Command to build:
+[source,bash]
+----
+wasm-ldc example.d
+----
+
+NOTE: You do need to run this through a local web server; loading `example.html` directly as a file in your browser will not work due to CORS.

@@ -1,0 +1,7 @@
+= Brian's Blog
+
+== link:wasm-setup.html[Getting started with D on WebAssembly]
+:source-highlighter: pygments
+
+Recently, through Sebastiaan Koppe's excellent work in porting DRuntime to run on WebAssembly (WASM), we can now run D code in the browser with a full runtime and Phobos implementation. This guide will detail how you can set this up and start using D in your own web projects.
+
