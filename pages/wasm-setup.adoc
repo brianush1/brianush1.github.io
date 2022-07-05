@@ -16,12 +16,12 @@ I will assume you are using a Linux system, but you can probably use the same pr
 * Python
 * libcurl for Phobos' std.net.curl (e.g., libcurl4 on recent Ubuntu)
 * zlib-dev (e.g., zlib1g-dev on Ubuntu)
-* LLVM dev 6.0+
+* LLVM dev 10.0+
 * Binaryen
 
 On Ubuntu 18.04 or 20.04, you can use the following command to install these (may work on other Debian-based distros; not tested):
 
-	sudo apt install git make clang++ ldc cmake ninja-build zlib1g-dev libcurl4 llvm-dev libclang-common-6.0-dev binaryen
+	sudo apt install git make ldc cmake ninja-build zlib1g-dev libcurl4 llvm-dev clang-tools-10 binaryen
 
 Also while we're here, make a new directory to house everything to do with your D on WASM setup:
 
